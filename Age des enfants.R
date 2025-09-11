@@ -26,7 +26,8 @@ merged_df_count <- left_join(age_enfants_concernes_count, age_enfants_accueillis
 merged_df_percentage <- left_join(age_enfants_concernes_percent, age_enfants_accueillis_percent, by = "value")
 
 ## Graphique mis en forme
-ggplot(merged_df, aes(x = value)) +
+ggplot(age_enfants_accueillis_count, aes(x = value)) +
+  geom_bar()
   labs(x = "Patient", y = "Count") +
   theme_minimal()+
   labs(
@@ -43,3 +44,193 @@ ggplot(merged_df, aes(x = value)) +
     axis.text.y=element_blank(),
     plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
   )
+  
+## Proposition de correction
+  
+  # Graphique avec pourcentages
+  ggplot(age_enfants_accueillis_percent, aes(x = value, y = n)) +
+    geom_col(fill = "steelblue") +
+    geom_text(aes(label = paste0(round(percent, 1), "%")), 
+              vjust = -0.5, family="Avenir", size=4) +
+    theme_minimal() +
+    labs(
+      title = NULL,
+      x = "Âge de l'enfant accueilli",
+      y = "Nombre"
+    ) +
+    theme(
+      panel.background = element_rect(fill = "transparent", color = NA),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      axis.text.x = element_text(size=14, angle = 0, hjust = 1),
+      axis.text.y = element_blank(),
+      plot.title = element_text(size = 10, face = "bold", hjust = 0.5)
+    )
+  
+## Combiner les types d'enfants (venus et pas venus)
+  
+  # Préparer les données comparatives
+  age_concernes <- age_enfants_concernes_percent %>%
+    mutate(type = "Concernés")
+  
+  age_accueillis <- age_enfants_accueillis_percent %>%
+    mutate(type = "Accueillis")
+  
+  df_comparatif <- bind_rows(age_concernes, age_accueillis)
+  
+  # Graphique comparatif
+  ggplot(df_comparatif, aes(x = value, y = n, fill = type)) +
+    geom_col(position = position_dodge(width = 0.8)) +
+    geom_text(
+      aes(label = NULL),
+      position = position_dodge(width = 0.8),
+      vjust = -0.5,
+      family = "Avenir",
+      size = 4
+    ) +
+    theme_minimal() +
+    labs(
+      title = "Répartition des âges des enfants",
+      x = NULL,
+      y = NULL,
+      fill = "Type"
+    ) +
+    theme(
+      panel.background = element_rect(fill = "transparent", color = NA),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      axis.text.x = element_text(size = 10, angle = 0, hjust = 1),
+      axis.text.y = element_text(size = 1),
+      plot.title = element_text(size = 10, face = "bold", hjust = 0.5),
+      legend.position = "top"
+    )
+  
+## Correction résolue
+  
+  ggplot(df_comparatif, aes(x = value, y = n, fill = type)) +
+    geom_col(position = position_dodge(width = 0.8)) +
+    geom_text(
+      aes(label = n),
+      position = position_dodge(width = 0.8),
+      vjust = -0.5,
+      family = "Avenir",
+      size = 3
+    ) +
+    theme_minimal() +
+    labs(
+      title = "Répartition des âges des enfants",
+      x = NULL,
+      y = NULL,
+      fill = "Type"
+    ) +
+    theme(
+      panel.background = element_rect(fill = "transparent", color = NA),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      axis.text.x = element_text(size = 10, angle = 0, hjust = 1),
+      axis.text.y = element_text(size = 8),
+      plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+      legend.position = "top"
+    )
+  
+  
+## En pourcentages
+  
+  ggplot(df_comparatif, aes(x = value, y = percent, fill = type)) +
+    geom_col(position = position_dodge(width = 0.8)) +
+    geom_text(
+      aes(label = paste0(round(percent, 1), "%")),
+      position = position_dodge(width = 0.8),
+      vjust = -0.5,
+      family = "Avenir",
+      size = 2.5
+    ) +
+    scale_y_continuous(labels = function(x) paste0(x, "%")) +
+    theme_minimal() +
+    labs(
+      title = "Répartition des âges des enfants (%)",
+      x = "Âge de l'enfant",
+      y = "Pourcentage",
+      fill = "Type"
+    ) +
+    theme(
+      panel.background = element_rect(fill = "transparent", color = NA),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      axis.text.x = element_text(size = 10, angle = 0, hjust = 1),
+      axis.text.y = element_text(size = 9),
+      plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+      legend.position = "top"
+    )
+  
+## aJOUT DES COULEURS
+
+  ggplot(df_comparatif, aes(x = value, y = percent, fill = type)) +
+    geom_col(position = position_dodge(width = 0.8)) +
+    scale_y_continuous(labels = function(x) paste0(x)) +
+    scale_fill_manual(values = c("Concernés" = "#F0A6C8", "Accueillis" = "#EB4B3C")) +
+    theme_minimal() +
+    labs(
+      title = "Répartition des âges des enfants (%)",
+      x = "Âge de l'enfant",
+      y = NULL,
+      fill = "Type"
+    ) +
+    theme(
+      panel.background = element_rect(fill = "transparent", color = NA),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      axis.text.x = element_text(size = 10, angle = 0, hjust = 1),
+      axis.text.y = element_text(size = 9),
+      plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+      legend.position = "top"
+    )
+  
+## Age des enfants
+  
+  ggplot(df_comparatif, aes(x = value, y = percent, fill = type)) +
+    geom_col(position = position_dodge(width = 0.8)) +
+    scale_y_continuous(labels = function(x) paste0(x, "%")) +
+    scale_x_continuous(breaks = sort(unique(df_comparatif$value))) +
+    scale_fill_manual(values = c("Concernés" = "#F0A6C8", "Accueillis" = "#EB4B3C")) +
+    theme_minimal() +
+    labs(
+      title = "Répartition des âges des enfants (%)",
+      x = "Âge de l'enfant",
+      y = NULL,
+      fill = "Type"
+    ) +
+    theme(
+      panel.background = element_rect(fill = "transparent", color = NA),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      axis.text.x = element_text(size = 10, angle = 0, hjust = 0.5),
+      axis.text.y = element_text(size = 9),
+      plot.title = element_text(size = 12, face = "bold", hjust = 0.5),
+      legend.position = "top"
+    )
+  
+### Correction
+  
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(forcats)
+  
+  ggplot(age_enfants_accueillis_percent, aes(x = as.numeric(value), y = percent)) +
+    geom_col(fill = "#F0A6C8", width = 0.7) +
+    geom_text(aes(label = paste0(round(percent, 1), "%")), 
+              vjust = -0.5, family = "Avenir", size = 3) +
+    scale_x_continuous(breaks = sort(unique(as.numeric(age_enfants_accueillis_percent$value)))) +  # ✅ tous les âges
+    labs(x = NULL, y = NULL) +
+    theme_minimal() +
+    theme(
+      panel.background = element_rect(fill = "transparent", color = NA),
+      panel.grid = element_blank(),
+      plot.background = element_rect(fill = "transparent", color = NA),
+      axis.text.x = element_text(size = 12, angle = 0, hjust = 0.5),
+      axis.text.y = element_blank(),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+    )
+  
+  

@@ -1,184 +1,268 @@
+install.packages("vroom")
+library(vroom)
+
+library(readr)
+
+## Types de patients
+
+## Données pro
+type_patients <- PAB %>%
+  select(patient1, patient2, patient3, patient4, patient5, patient6, patient7, patient8, patient9, patient10) %>%
+  filter(if_any(everything(), ~ !is.na(.))) %>%
+  filter(!is.na(value))
+
+
+type_patients_count <- type_patients %>%
+  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
+  count(value) %>%
+  filter(!is.na(value))
+
+
+type_patients_count_percent <- type_patients_count %>%
+  mutate(percent = n / sum(n) * 100) 
+
+## Données parents
+type_patients_parents <- Nettoyage_parents %>%
+  filter(!is.na(type_patient)) %>%        # remove missing values
+  count(type_patient) %>%                 # counts per type_patient
+  mutate(percent = n / sum(n) * 100)     # percentage of total
+
+
+## Merge des 2 bases de données
+
 library(dplyr)
-library(ggplot2)
-library(scales)
 
-# Suppose your raw dataset has one row per respondent
-# and columns patient1..6 = 1 (yes) / 0 (no)
-# Example:
-# respondents_df <- read.csv("your_file.csv")
+merged_type_patient <- type_patients_parents %>%
+  left_join(type_patients_count_percent, by = c("type_patient" = "value"))
 
-# Create mutually exclusive categories
-patients_long <- PAB %>%
-  mutate(
-    category = case_when(
-      patient1 != "" & patient2 == "" ~ "Mère seule",
-      patient2 != "" & patient1 == "" ~ "Père seul",
-      patient1 != "" & patient2 != "" ~ "Mère & Père",
-      patient5 != "" & patient6 == "" ~ "Belle mère seule",
-      patient6 != "" & patient5 == "" ~ "Beau père seul",
-      patient5 != "" & patient6 != "" ~ "Belle mère & Beau père",
-      patient7 != "" & patient8 == "" ~ "Grand-mère seule",
-      patient8 != "" & patient7 == "" ~ "Grand-père seul",
-      patient8 != "" & patient7 != "" ~ "Grands-parents",
-      patient10 != "" ~ "Professionnel",
-      TRUE ~ NA_character_
-    )
+merged_type_patients <- merged_type_patient %>%
+  rename(
+    parents = percent.x,
+    pros = percent.y
   )
 
-# Calculate percentages
-patients_percentage_df <- patients_long %>%
-  count(category) %>%
-  mutate(percentage = 100 * n / sum(n))
+### PLOT
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Préparer les données pour le plot
+plot_type_patient <- merged_type_patients %>%
+  pivot_longer(
+    cols = c(parents, pros),   # ou les noms exacts de tes colonnes après merge
+    names_to = "source",
+    values_to = "percent"
+  )
+
+library(dplyr)
+library(ggplot2)
+
+# Remove "Autre (veuillez préciser)"
+plot_type_patient_clean <- plot_type_patient %>%
+  filter(type_patient != "Autre (veuillez préciser)")
 
 # Plot
-ggplot(patients_percentage_df, aes(x = reorder(category, -percentage), y = percentage)) +
-  geom_col(fill = "#4E79A7") +
-  labs(
-    title = "Pourcentage de répondants par type de patient",
-    x = "Type de patient",
-    y = "Pourcentage"
+ggplot(plot_type_patient_clean, aes(x = type_patient, y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,
+            color = "black",
+            size = 4) +
+  scale_fill_manual(
+    values = c(
+      "pros" = "#F4813D", 
+      "parents" = "#F0A6C8"
+    ),
+    labels = c("Données pros", "Données parents")
   ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
   theme_minimal() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, angle = 0, hjust = 0.5, color = "black"), # centered
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
   ) +
-  scale_y_continuous(labels = percent_format(scale = 1))
+  ylim(0, max(plot_type_patient_clean$percent, na.rm = TRUE) * 1.2)
+
+accompagne_parents <- Nettoyage_parents %>%
+  select(type_patient, acc_enfant)
+
+accompagne_pros <- PAB %>%
+  select(patient1, patient2, enfant)
 
 library(dplyr)
-library(ggplot2)
-library(scales)
+library(tidyr)
 
-# Create the extra bar for "Père et Mère"
-mere_pere_bar <- PAB %>%
-  filter(somme_patients == 2) %>%              # keep rows where sum == 2
-  summarise(n = n()) %>%                       # count respondents
-  mutate(
-    percentage = 100 * n / nrow(PAB),          # compute percentage
-    patient_variable = "Père et Mère"
+# First, reshape accompagnes_pros so that patient1 and patient2 become a single column
+accompagne_pros_long <- accompagne_pros %>%
+  pivot_longer(
+    cols = c(patient1, patient2),
+    names_to = "parent_type",
+    values_to = "patient_name"
   )
-# Bind to the original dataset
-patients_plot_df <- bind_rows(patients_percentage_df, mere_pere_bar)
+
+# Now map parent_type to the type_patient names in Nettoyage_parents
+accompagne_pros_long <- accompagne_pros_long %>%
+  mutate(type_patient = case_when(
+    parent_type == "patient1" ~ "Mère",
+    parent_type == "patient2" ~ "Père"
+  ))
+
+accompagne_summary <- accompagne_pros_long %>%
+  filter(!is.na(enfant)) %>%  # remove missing values
+  group_by(type_patient, enfant) %>%
+  summarise(n = n(), .groups = "drop") %>%  # count occurrences
+  group_by(type_patient) %>%
+  mutate(percent = n / sum(n) * 100) %>%   # calculate percentages per parent type
+  ungroup()
+
+## pour les parents
+library(dplyr)
+
+accompagne_parents_clean <- accompagne_parents %>%
+  filter(!is.na(acc_enfant), type_patient != "Autre (veuillez préciser)") %>%  # remove NA and 'Autre'
+  mutate(acc_enfant = case_when(
+    acc_enfant == "Sans enfant" ~ 0,
+    acc_enfant == "Accompagné(e) d'un ou plusieurs enfant(s)" ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+# Count and percentage
+accompagne_parents_summary <- accompagne_parents_clean %>%
+  group_by(type_patient, acc_enfant) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(type_patient) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  ungroup() %>%
+  arrange(type_patient, desc(acc_enfant))
+
+accompagne_parents_summary
 
 
-patients_plot_df <- patients_plot_df %>%
-  mutate(fill_color = ifelse(patient_variable=="Mère seule", rgb(0.235, 0.75, 0.60), rgb(0.240, 0.166, 0.200)))  
 
-# Plot
-ggplot(patients_plot_df, aes(x = reorder(patient_variable, -percentage), y = percentage, fill=fill_color)) +
-  geom_col(size=0.6) +
-  labs(
-    title = "Patients reçus",
-    x = NULL,
-    y=NULL
-  ) +
-  theme_minimal(base_family="Avenir") +
-  theme(
-    panel.background=element_blank(),
-    panel.grid=element_blank(),
-    plot.background=element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
-  ) +
-  scale_y_continuous(labels = percent_format(scale = 1))
+# Merge with parents data by type_patient
 
+library(dplyr)
 
-patients_plot_df <- patients_plot_df %>%
-  mutate(fill_color = ifelse(patient_variable == "Mère seule",
-                             rgb(235, 75, 60, maxColorValue = 255),
-                             rgb(240, 166, 200, maxColorValue = 255)))
+merged_accompagne <- accompagne_parents_summary %>%
+  left_join(accompagne_summary,
+            by = c("type_patient" = "type_patient", 
+                   "acc_enfant" = "enfant"))
+
+# Optional: rename columns for clarity
+merged_accompagne <- merged_accompagne %>%
+  rename(parents_n = n.x,
+         parents_percent = percent.x,
+         pros_n = n.y,
+         pros_percent = percent.y)
+
+merged_accompagne <- merged_accompagne %>%
+  filter(type_patient != "Future mère")
 
 
+merged_accompagne
 
+## Plot
 
-ggplot(patients_plot_df, aes(x = reorder(patient_variable, -percentage), y = percentage)) +
-  geom_col(aes(fill = fill_color), colour = "black", size = 0.6) +
-  scale_fill_identity() +
-  labs(
-    title = "Patients reçus",
-    x = "Type de patient",
-    y = NULL
-  ) +
-  theme_minimal(base_family = "Avenir") +
-  theme(
-    panel.background = element_blank(),
-    panel.grid = element_blank(),
-    plot.background = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
-  ) +
-  scale_y_continuous(labels = scales::percent_format(scale = 1))
+library(ggplot2)
+library(tidyr)
+library(dplyr)
 
-#### PLOT
-
-patients <- PAB %>%
-  select(patient1, patient2, patient5, patient6, patient7, patient8, enfant) %>%
-  group_by(enfant)
-
-
-patients_count <- patients %>%
-  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
-  filter(!is.na(value)) %>%
-  count(value)
-
-patients_count_percent <- patients_count %>%
-  mutate(percent = n / sum(n) * 100)
-
-ggplot(patients_count_percent, aes(x = fct_reorder(value, percent), y = percent, fill=enfant)) +
-  geom_col(fill="#F0A6C8") +
-  labs(x = "Patient", y = "Count") +
-  theme_minimal()+
-  labs(
-    title = NULL,
-    x = NULL,
-    y = NULL
-  )+
-  geom_text(aes(label = paste0(round(percent, 1), "%")), vjust = -0.5, size=5, family="Avenir") +
-  theme(
-    panel.background = element_rect(fill = "transparent", color = NA),
-    panel.grid = element_blank(),
-    plot.background = element_rect(fill = "transparent", color = NA),
-    axis.text.x = element_text(size=12, angle = 0, hjust = 1),
-    axis.text.y=element_blank(),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
-    
-## Plot by enfant
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-patients_stack <- PAB %>%
-  select(patient1, patient2, patient5, patient6, patient7, patient8, enfant) %>%
-  pivot_longer(cols = starts_with("patient"),
-               names_to = "patient",
-               values_to = "present") %>%
-  filter(!is.na(present)) %>%
-  group_by(patient, enfant) %>%
-  summarise(n = n(), .groups = "drop") %>%
-  group_by(patient) %>%
-  mutate(percent = n / sum(n) * 100) %>%
-  mutate(value_recode = recode(patient,
-                               "patient1" = "Mère",
-                               "patient2" = "Père",
-                               "patient5"="Belle-mère",
-                               "patient6"="Beau-père",
-                               "patient7"="Grand-mère",
-                               "patient8"="Grand-père"))
+# Pivot the percentages for plotting
+plot_accompagne <- merged_accompagne %>%
+  pivot_longer(
+    cols = c(parents_percent, pros_percent),
+    names_to = "source",
+    values_to = "percent"
+  )
 
-ggplot(patients_stack, aes(x = value_recode, y = percent, fill = factor(enfant))) +
-  geom_col(position = "stack") +
-  geom_text(aes(label = paste0(round(percent, 1), "%")), 
-            position = position_stack(vjust = 0.5), size = 4) +
-  scale_fill_manual(values = c("0" = "#F0A6C8", "1" = "#EB4B3C"),
-                    labels = c("0" = "Sans enfant", "1" = "Avec enfant"),
-                    name = "Enfant") +
-  labs(x = NULL, y = NULL, title = "Répartition avec / sans enfant par patient") +
+# Plot horizontal bar chart
+ggplot(plot_accompagne, aes(y = type_patient, x = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            position = position_dodge(width = 0.8),
+            hjust = -0.2,
+            color = "black",
+            size = 4) +
+  scale_fill_manual(
+    values = c(
+      "pros_percent" = "#F0A6C8", 
+      "parents_percent" = "#F4813D"
+    ),
+    labels = c("Données pros", "Données parents")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
   theme_minimal() +
   theme(
     panel.background = element_rect(fill = "transparent", color = NA),
-    panel.grid = element_blank(),
     plot.background = element_rect(fill = "transparent", color = NA),
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_blank(),
-    plot.title = element_text(size = 14, hjust = 0.5)
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
+  ) +
+  coord_cartesian(xlim = c(0, max(plot_accompagne$percent, na.rm = TRUE) * 1.2))
+
+### Version verticale
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Filter for acc_enfant = 1
+plot_accompagne_filtered <- merged_accompagne %>%
+  filter(acc_enfant == 1)
+
+# Pivot longer for plotting
+plot_accompagne_long <- plot_accompagne_filtered %>%
+  pivot_longer(
+    cols = c(parents_percent, pros_percent),
+    names_to = "source",
+    values_to = "percent"
   )
+
+# Plot
+ggplot(plot_accompagne_long, aes(x = type_patient, y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,  # label above bar
+            color = "black",
+            size = 4) +
+  scale_fill_manual(
+    values = c(
+      "pros_percent" = "#F0A6C8",
+      "parents_percent" = "#F4813D"
+    ),
+    labels = c("Données pros", "Données parents")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
+  ) +
+  ylim(0, max(plot_accompagne_long$percent, na.rm = TRUE) * 1.2)

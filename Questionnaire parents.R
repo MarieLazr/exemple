@@ -31,9 +31,25 @@ ggplot(age_count_percent, aes(x = fct_reorder(value, percent), y = percent)) +
     panel.background = element_rect(fill = "transparent", color = NA),
     panel.grid = element_blank(),
     plot.background = element_rect(fill = "transparent", color = NA),
-    axis.text.x = element_text(angle = 0, hjust = 1),
+    axis.text.x = element_text(size=12, angle = 0, hjust = 1),
     axis.text.y=element_blank(),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
   )
 
+library(forcats)
+
+ggplot(age_count_percent, aes(x = fct_reorder(value, percent), y = percent)) +
+  geom_col(fill = "#F0A6C8", width = 0.7) +  # ajuste la largeur des colonnes
+  geom_text(aes(label = paste0(round(percent, 1), "%")), 
+            vjust = -0.5, size = 4) +
+  labs(x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    axis.text.x = element_text(size = 12, angle = 0, hjust = 0.5),  # centre horizontalement
+    axis.text.y = element_blank(),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
 
