@@ -1,0 +1,1090 @@
+---
+title: "Graphiques dans l'ordre du diaporama"
+format: html
+editor: visual
+---
+
+## Installation des packages et bases de données
+
+### Packages
+
+```{r}
+##install.packages("dplyr")
+##install.packages("ggplot")
+##install.packages("forcats")
+```
+
+### Bases de données (professionnels et parents)
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(forcats)
+library(readr)
+
+library(readr)
+PAB <- read_delim("Pâtes au Beurre - questionnaire Professionnel_v2.xlsx2.csv", 
+    delim = ";", escape_double = FALSE, trim_ws = TRUE)
+View(Pâtes_au_Beurre_questionnaire_Professionnel_v2_xlsx2)
+
+Nettoyage_parents <- read_csv("Nettoyage parents.csv")
+## View(Nettoyage_parents)
+```
+
+## Qui vient aux Pâtes au beurre ?
+
+### L'âge et le genre des personnes venues aux pâtes au beurre
+
+#### Type de personne accueillie
+
+```{r}
+##ouverture des packages nécessaires
+library(readr)
+library(dplyr)
+library(tidyr)
+
+############################
+## Données professionnels ##
+############################
+
+# J'extrais les informations concernant le type de personne uniquement et je retire les "NA"
+
+type_patients <- PAB %>%
+  select(patient1, patient2, patient3, patient4, patient5, patient6, patient7, patient8, patient9, patient10) %>%
+  filter(if_any(everything(), ~ !is.na(.)))
+
+# Je regroupe les types de patients dans une même colonne et je compte les occurences de chaque type de patients (combien de fois c'est une Mère, combien de fois un Père etc.)
+
+type_patients_count <- type_patients %>%
+  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
+  count(value) %>%
+  filter(!is.na(value))
+
+# J'ajoute une colonne qui me donne le pourcentage de présence de chaque type de patient
+
+type_patients_count_percent <- type_patients_count %>%
+  mutate(percent = n / sum(n) * 100) 
+
+
+#####################
+## Données parents ##
+#####################
+
+# Les données de type de patients sont plus pratiques, je peux directement extraire la colonne du type de patient, compter les occurences et calculer les pourcentages 
+
+type_patients_parents <- Nettoyage_parents %>%
+  filter(!is.na(type_patient)) %>%       
+  count(type_patient) %>%                
+  mutate(percent = n / sum(n) * 100) 
+
+###########################################
+## Mise en commun des 2 bases de données ##
+###########################################
+
+library(dplyr)
+
+# je les regroupe en fonction du type de patient (les Mères avec les Mères etc.)
+
+merged_type_patient <- type_patients_parents %>%
+  left_join(type_patients_count_percent, by = c("type_patient" = "value"))
+
+# Je donne un nouveau nom aux colonnes des calculs de pourcentages pour bien distinguer celle de la base de donnée des professionnels, et celle de la base de données des parents
+
+merged_type_patients <- merged_type_patient %>%
+  rename(
+    parents = percent.x,
+    pros = percent.y
+  )
+
+###########################
+## Création du graphique ##
+###########################
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Je prépare les données pour le plot (je pivote ma base de données pour faciliter sa lecture)
+plot_type_patient <- merged_type_patients %>%
+  pivot_longer(
+    cols = c(parents, pros),
+    names_to = "source",
+    values_to = "percent"
+  )
+
+# Je supprime une colonne qui ne m'intéresse pas
+
+plot_type_patient_clean <- plot_type_patient %>%
+  filter(type_patient != "Autre (veuillez préciser)")
+
+# Je crée mon graphique
+
+ggplot(plot_type_patient_clean, #la base de donnée finale pivotée et nettoyée pour faire mon graphique
+       aes(x = type_patient, y = percent, fill = source)) + #sur l'axe des abscisses je veux les types de patients, sur l'axe des ordonnées la proportion de patients
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) + # je veux des colonnes d'épaisseur 0.7
+  geom_text(aes(label = paste0(round(percent, 1), "%")), # je veux afficher les pourcentages
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,
+            color = "black",
+            size = 6) + # Je personnalise l'apparence des pourcentages
+  scale_fill_manual(
+    values = c(
+      "pros" = "#F4813D", 
+      "parents" = "#F0A6C8" # Je choisis les couleurs pour distinguer mes 2 bases de données
+    ),
+    labels = c("Données pros", "Données parents") # Je donne un nom plus clair à ma légende
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) + # Je retire les titres 
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA), # fond transparent
+    plot.background = element_rect(fill = "transparent", color = NA), # fond transparent
+    panel.grid = element_blank(), # fond transparent
+    axis.text.x = element_text(size = 14, angle = 0, hjust = 0.5, color = "black"), # je centre les éléments de l'axe des abscisses sous les barres
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"), # je m'assure que tous les textes sont en noir
+    legend.position = "bottom" # je place ma légende en bas du graphique
+  ) +
+  ylim(0, max(plot_type_patient_clean$percent, na.rm = TRUE) * 1.2) # j'ajuste la taille du graphique pour qu'il ne soit pas coupé
+```
+
+#### Présence de(s) enfant(s)
+
+```{r}
+library(dplyr)
+library(tidyr)
+
+
+accompagne_parents <- Nettoyage_parents %>%
+  select(type_patient, acc_enfant)
+
+accompagne_pros <- PAB %>%
+  select(patient1, patient2, enfant)
+
+
+accompagne_pros_long <- accompagne_pros %>%
+  pivot_longer(
+    cols = c(patient1, patient2),
+    names_to = "parent_type",
+    values_to = "patient_name"
+  )
+
+
+accompagne_pros_long <- accompagne_pros_long %>%
+  mutate(type_patient = case_when(
+    parent_type == "patient1" ~ "Mère",
+    parent_type == "patient2" ~ "Père"
+  ))
+
+accompagne_summary <- accompagne_pros_long %>%
+  filter(!is.na(enfant)) %>%  
+  group_by(type_patient, enfant) %>%
+  summarise(n = n(), .groups = "drop") %>%  
+  group_by(type_patient) %>%
+  mutate(percent = n / sum(n) * 100) %>%   
+  ungroup()
+
+
+accompagne_parents_clean <- accompagne_parents %>%
+  filter(!is.na(acc_enfant), type_patient != "Autre (veuillez préciser)") %>%  # remove NA and 'Autre'
+  mutate(acc_enfant = case_when(
+    acc_enfant == "Sans enfant" ~ 0,
+    acc_enfant == "Accompagné(e) d'un ou plusieurs enfant(s)" ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+
+accompagne_parents_summary <- accompagne_parents_clean %>%
+  group_by(type_patient, acc_enfant) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(type_patient) %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  ungroup() %>%
+  arrange(type_patient, desc(acc_enfant))
+
+accompagne_parents_summary
+
+merged_accompagne <- accompagne_parents_summary %>%
+  left_join(accompagne_summary,
+            by = c("type_patient" = "type_patient", 
+                   "acc_enfant" = "enfant"))
+
+
+merged_accompagne <- merged_accompagne %>%
+  rename(parents_n = n.x,
+         parents_percent = percent.x,
+         pros_n = n.y,
+         pros_percent = percent.y)
+
+merged_accompagne <- merged_accompagne %>%
+  filter(type_patient != "Future mère")
+
+
+merged_accompagne
+
+###############
+## Graphique ##
+###############
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+plot_accompagne <- merged_accompagne %>%
+  pivot_longer(
+    cols = c(parents_percent, pros_percent),
+    names_to = "source",
+    values_to = "percent"
+  )
+
+ggplot(plot_accompagne_long, aes(x = type_patient, y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,  # label above bar
+            color = "black",
+            size = 6) +
+  scale_fill_manual(
+    values = c(
+      "pros_percent" = "#F0A6C8",
+      "parents_percent" = "#F4813D"
+    ),
+    labels = c("Données pros", "Données parents")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
+  ) +
+  ylim(0, max(plot_accompagne_long$percent, na.rm = TRUE) * 1.2)
+
+
+```
+
+#### Age des personnes accueillies (hors enfants)
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+age_parents <- Nettoyage_parents %>%
+  select(age)
+
+
+age_parents_summary <- age_parents %>%
+  filter(!is.na(age)) %>%                    
+  count(age) %>%                              
+  mutate(percent = n / sum(n) * 100)         
+
+###############
+## Graphique ##
+###############
+
+ggplot(age_parents_summary, aes(y = age, x = percent)) +
+  geom_col(fill = "#F4813D", width = 0.7) +                # orange bars
+  geom_text(aes(label = paste0(round(percent, 1), "%")),   # labels at end of bars
+            hjust = -0.1, color = "black", size = 6) +
+  labs(x = NULL, y = NULL, title = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black")
+  ) +
+  coord_cartesian(xlim = c(0, max(age_parents_summary$percent) * 1.2))
+
+```
+
+### La situation professionnelle et de logement
+
+#### Catégorie socio-professionnelle des personnes venues aux Pâtes au beurre
+
+```{r}
+library(tibble)
+library(dplyr)
+
+# Création du tableau
+csp_data <- tribble(
+  ~categorie, ~pourcentage,
+  "Agriculteurs", 1.5,
+  "Artisans, commerçants et chefs d'entreprise", 6.5,
+  "Cadres", 21.6,
+  "Professions intermédiaires", 24.7,
+  "Employés", 26.2,
+  "Employés qualifiés", 14.8,
+  "Employés peu qualifiés", 11.4,
+  "Ouvriers", 19.1,
+  "Ouvriers qualifiés", 12.8,
+  "Ouvriers peu qualifiés", 6.3,
+  "Non renseigné", 0.5
+)
+
+csp_grouped <- csp_data %>%
+  mutate(
+    categorie = case_when(
+      grepl("Employés", categorie) ~ "Employés",
+      grepl("Ouvriers", categorie) ~ "Ouvriers",
+      TRUE ~ categorie
+    )
+  ) %>%
+  group_by(categorie) %>%
+  summarise(pourcentage = sum(pourcentage, na.rm = TRUE)) %>%
+  ungroup()
+
+# Harmonisation des catégories
+pro_clean <- pro_count_percent %>%
+  mutate(
+    categorie = case_when(
+      str_detect(value, "Agriculteur") ~ "Agriculteurs",
+      str_detect(value, "Artisan") ~ "Artisans, commerçants et chefs d'entreprise",
+      str_detect(value, "Cadre") ~ "Cadres",
+      str_detect(value, "Employé") ~ "Employés",
+      str_detect(value, "Ouvrier") ~ "Ouvriers",
+      str_detect(value, "Profession intermédiaire") ~ "Professions intermédiaires",
+      str_detect(value, "Sans activité") ~ "Non renseigné",
+      str_detect(value, "Retraité") ~ "Non renseigné",
+      TRUE ~ value
+    )
+  ) %>%
+  rename(pros = percent)
+
+csp_clean <- csp_grouped %>%
+  rename(comp = pourcentage)
+
+merged_data <- pro_clean %>%
+  left_join(csp_clean, by = "categorie")
+
+
+###############
+## Graphique ##
+###############
+
+library(dplyr)
+library(ggplot2)
+
+# Créer un ordre des catégories selon la somme des pourcentages
+value_order <- plot_data %>%
+  group_by(value) %>%
+  summarise(total_percent = sum(percent, na.rm = TRUE)) %>%
+  arrange(desc(total_percent)) %>%
+  pull(value)
+
+# Transformer en facteur avec l'ordre correct
+plot_data <- plot_data %>%
+  mutate(value = factor(value, levels = value_order))
+
+# Plot horizontal
+ggplot(plot_data, aes(y = value, x = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            position = position_dodge(width = 0.8),
+            hjust = -0.2,
+            color = "black",
+            size = 4) +
+  scale_fill_manual(
+    values = c(
+      "pros" = "#F0A6C8", 
+      "comp" = "#FF4C4C"
+    ),
+    labels = c("Données pros", "Comparaison")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
+  ) +
+  coord_cartesian(xlim = c(0, max(plot_data$percent, na.rm = TRUE) * 1.2))
+
+
+```
+
+#### Situation de logement des patients répondants
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+logement_count <- Nettoyage_parents %>%
+  select(cat_logement) %>%
+  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  count(value)
+
+library(forcats)
+logement_count_percent <- logement_count %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  mutate(value_recode = recode(value,
+                          "Vous habitez dans un appartement dont vous êtes propriétaire ou locataire" = "Appartement",
+                          "Vous habitez dans une maison dont vous êtes propriétaire ou locataire" = "Maison"))
+
+logement_second_source <- tibble(
+  value_recode = c("Maison", "Appartement"),
+  percent = c(66.7, 33.3),   # 2/3 and 1/3 in percentage
+  source = "Comparaison"
+)
+
+# Add source to the first dataset
+logement_first_source <- logement_count_percent %>%
+  mutate(source = "Pros")
+
+# Combine the two datasets
+logement_plot_data <- bind_rows(logement_first_source, logement_second_source)
+
+# Plot with dodged bars
+ggplot(logement_plot_data, aes(x = fct_reorder(value_recode, percent), y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,
+            color = "black",
+            size = 6) +
+  scale_fill_manual(
+    values = c(
+      "Pros" = "#F0A6C8", 
+      "Comparaison" = "#FF4C4C"
+    ),
+    labels = c("Données pros", "Comparaison")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    axis.text.x = element_text(size = 14, hjust = 0.5, color = "black"),
+    axis.text.y = element_blank(),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom",
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  ) +
+  ylim(0, max(logement_plot_data$percent, na.rm = TRUE) * 1.2)
+
+
+```
+
+#### Situation de rue des patients reçus
+
+```{r}
+
+rue_count <- PAB %>%
+  select(rue) %>%
+  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  count(value)
+
+library(forcats)
+rue_count_percent <- rue_count %>%
+  mutate(percent = n / sum(n) * 100) %>%
+  mutate(value = recode(value,
+                        "Oui"="En situation de rue",
+                        "Non"="Logé.e.s"))
+
+rue_comparaison <- tibble(
+  value = c("En situation de rue", "Logé.e.s"),
+  percent = c(1, 99),
+  source = "Comparaison"
+)
+
+# Ajouter source = Pros dans les données existantes
+rue_pros <- rue_count_percent_filtered %>%
+  mutate(source = "Pros")
+
+# Fusionner les deux
+rue_plot_data <- bind_rows(rue_pros, rue_comparaison)
+
+# Graphique
+ggplot(rue_plot_data, aes(x = fct_reorder(value, percent), y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent, 1), "%")),
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,
+            size = 6,
+            color = "black") +
+  labs(x = NULL, y = NULL, title = NULL) +
+  scale_y_continuous(labels = function(x) paste0(x, "%"),
+                     expand = expansion(mult = c(0, 0.05))) +
+  scale_fill_manual(
+    values = c("Pros" = "#F0A6C8", "Comparaison" = "#FF4C4C"),
+    labels = c("Données pros", "Données de comparaison")
+  ) +
+  scale_y_continuous(
+  labels = function(x) paste0(x, "%"),
+  expand = expansion(mult = c(0, 0.2))  # passe de 0.05 à 0.2
+) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, hjust = 0.5, color = "black"),
+    axis.text.y = element_blank(),
+    legend.position = "bottom",
+    legend.text = element_text(color = "black"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  ) +
+  coord_cartesian(clip = "off")   # <- permet aux labels de dépasser
+
+
+
+```
+
+### Les formats familiaux
+
+#### Nombre d'enfants dans le foyer
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+nb_enfants_count <- PAB %>%
+  select(nb_enfants) %>%
+  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  filter(value != "Je ne sais pas") %>%
+  count(value)
+
+nb_enfants_count_percent <- nb_enfants_count %>%
+  mutate(percent = n / sum(n) * 100)
+
+## Ajout des données parents
+nb_enfants_parents <- Nettoyage_parents %>% 
+  select(nb_enfants_mineurs, nb_enfants_majeurs)
+
+
+nb_enfants_parents <- nb_enfants_parents %>%
+  mutate(nb_enfants_total = nb_enfants_mineurs + nb_enfants_majeurs)
+
+
+# Comptage des occurrences et calcul du pourcentage
+nb_enfants_stats <- nb_enfants_parents %>%
+  count(nb_enfants_total) %>%               # compte les occurrences de chaque total
+  mutate(pourcentage = n / sum(n) * 100)   # calcule le pourcentage
+
+nb_enfants_stats
+
+## Merge des 2 bases de données
+merged_data <- nb_enfants_count_percent %>%
+  mutate(value = as.numeric(value)) %>%
+  left_join(nb_enfants_stats, by = c("value" = "nb_enfants_total"))
+
+merged_data <- merged_data %>%
+  rename(
+    données_pros = percent,
+    donnees_parents = pourcentage
+  )
+
+
+## Ajout des données de comparaison
+
+library(dplyr)
+library(readr)
+
+# 1. Read the CSV
+données_comparaison_type_famille <- read_delim(
+  "données comparaison type famille.csv", 
+  delim = ";", 
+  escape_double = FALSE, 
+  trim_ws = TRUE
+)
+
+
+library(dplyr)
+library(readr)
+library(janitor)
+données_comparaison_type_famille_clean <- données_comparaison_type_famille %>%
+  remove_empty(c("rows", "cols"))
+
+# 4. Merge with previous merged_data by 'value' (or 'nb_enfants_total' if renamed)
+final_merged <- merged_data %>%
+  left_join(données_comparaison_type_famille_clean, 
+            by = c("value" = "nb_enfants")) 
+final_merged <- final_merged %>%
+  rename(donnees_comparaison = percentage)
+
+# 5. Inspect result
+head(final_merged)
+
+library(dplyr)
+
+final_merged <- final_merged %>%
+  mutate(donnees_comparaison = donnees_comparaison / 10)
+
+#################
+## GRAPH FINAL ##
+#################
+
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Ordre souhaité
+#ordre_familles <- c
+
+# Préparer les données pour le plot
+plot_data <- merged_data %>%
+  select(value, données_pros, donnees_parents) %>%
+  pivot_longer(cols = c(données_pros, donnees_parents),
+               names_to = "source",
+               values_to = "percent")
+
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Préparer les données pour le plot avec les 3 sources
+plot_data_final <- final_merged %>%
+  select(value, données_pros, donnees_parents, donnees_comparaison) %>%
+  pivot_longer(
+    cols = c(données_pros, donnees_parents, donnees_comparaison),
+    names_to = "source",
+    values_to = "percent"
+  )
+
+
+## Catégorie 4 et +
+
+# Update first two datasets (données_pros and donnees_parents)
+merged_data <- merged_data %>%
+  mutate(
+    value = as.numeric(value),
+    value = ifelse(value >= 4, "4 et plus", as.character(value))
+  ) %>%
+  group_by(value) %>%
+  summarise(
+    données_pros = sum(as.numeric(données_pros), na.rm = TRUE),
+    donnees_parents = sum(as.numeric(donnees_parents), na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+
+# Make sure all values are properly grouped
+final_plot_data <- final_merged %>%
+  mutate(
+    value = as.character(value),
+    value = ifelse(as.numeric(value) >= 4, "4 et plus", value)
+  ) %>%
+  group_by(value) %>%
+  summarise(
+    données_pros = sum(as.numeric(données_pros), na.rm = TRUE),
+    donnees_parents = sum(as.numeric(donnees_parents), na.rm = TRUE),
+    donnees_comparaison = sum(as.numeric(donnees_comparaison), na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  pivot_longer(cols = c(données_pros, donnees_parents, donnees_comparaison),
+               names_to = "source",
+               values_to = "percent")
+
+# Plot
+ggplot(final_plot_data, aes(x = value, y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent), "%")),
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,
+            color = "black",
+            size = 6) +
+  scale_fill_manual(
+    values = c(
+      "données_pros" = "#FF4C4C", 
+      "donnees_parents" = "#F4813D", 
+      "donnees_comparaison" = "#F0A6C8"  # same red as before
+    ),
+    labels = c("Données pros", "Données parents", "Comparaison")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
+  ) +
+  ylim(0, max(final_plot_data$percent, na.rm = TRUE) * 1.2)
+
+```
+
+#### Types de famille rencontrées
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+## Pour la base de données professionnels
+
+famille_count <- PAB %>%
+  select(type_famille) %>%
+  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  count(value)
+
+
+
+famille_count_percent_pros <- famille_count %>%
+  mutate(percent = n / sum(n) * 100)
+
+famille_count_percent_pros <- famille_count %>%
+  mutate(percent = n / sum(n) * 100) 
+
+## Pour la base de données parents
+
+library(dplyr)
+
+famille_count_percent_parents <- Nettoyage_parents %>%
+  select(type_famille) %>%
+  mutate(
+    value_recode = recode(type_famille,
+                          "Une famille nucléaireUne famille composée d'un couple de parents et leur(s) enfant(s)" = "Une famille nucléaire",
+                          "Autre (veuillez préciser)" = "Autre"
+    )
+  ) %>%
+  count(value_recode) %>%
+  mutate(percent = n / sum(n) * 100)
+
+
+## Ajout des données de comparaison depuis les valeurs de l'INSEE
+library(readr)
+library(readr)
+library(dplyr)
+
+données_comparaison_type_famille_clean <- tibble::tribble(
+  ~value_recode,                 ~percent,
+  "Une famille monoparentale",    9.5,
+  "Une famille nucléaire",       23.4,
+  "Une famille recomposée",       3.6   # 
+)
+
+
+library(dplyr)
+
+## Mise en forme harmonisée pour le merge
+
+# Parents
+famille_count_percent_parents <- famille_count_percent_parents %>%
+  select(value_recode, percent) %>%
+  rename(Données_parents = percent)
+
+# Pros
+famille_count_percent_pro <- famille_count_percent_pro %>%
+  select(value_recode, Données_pros) 
+
+# Comparaison
+données_comparaison_type_famille_clean <- données_comparaison_type_famille_clean 
+
+# Fusionner les 3 sur value_recode
+merged_data_famille <- famille_count_percent_parents %>%
+  full_join(famille_count_percent_pro, by = "value_recode") %>%
+  full_join(données_comparaison_type_famille_clean, by = "value_recode")
+merged_data_famille <- merged_data_famille %>%
+  filter(!value_recode %in% c("Aucun des éléments ci-dessus", "Autre"))
+
+merged_data_famille <- merged_data_famille %>%
+  filter(!value_recode %in% c("Aucun des éléments ci-dessus", "Autre"),
+         !is.na(value_recode))
+merged_data_famille <- merged_data_famille %>%
+  rename(Données_comparaison = percent)
+
+###############
+## Graphique ##
+###############
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Ordre souhaité des familles
+ordre_familles <- c("Une famille nucléaire",
+                    "Une famille monoparentale",
+                    "Une famille recomposée",
+                    "Une famille séparée")
+
+# Préparer les données pour le plot (format long)
+plot_data <- merged_data_famille %>%
+  select(value_recode, Données_pros, Données_comparaison, Données_parents) %>%
+  pivot_longer(
+    cols = starts_with("Données"),
+    names_to = "source",
+    values_to = "percent"
+  ) %>%
+  mutate(
+    value_recode = factor(value_recode, levels = ordre_familles)
+  )
+
+# Graphique horizontal
+ggplot(plot_data, aes(x = value_recode, y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent), "%")),
+            position = position_dodge(width = 0.8),
+            hjust = -0.1,
+            color = "black",
+            size = 6) +
+  scale_fill_manual(
+    values = c("Données_pros" = "#F0A6C8",
+               "Données_comparaison" = "#EB4B3C",
+               "Données_parents" = "#F4813D")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL, title = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 12, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
+  ) +
+  ylim(0, max(plot_data$percent, na.rm = TRUE) * 1.2) +
+  coord_flip()
+
+```
+
+#### Age des enfants du foyer
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(forcats)
+
+age_enfants <- PAB %>%
+  select(nb_enfants) %>%
+  pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%
+  filter(!is.na(value)) %>%
+  filter(value != "Je ne sais pas") %>%
+  count(value)
+
+nb_enfants_count_percent <- nb_enfants_count %>%
+  mutate(percent = n / sum(n) * 100)
+
+### Ajout des données de comparaison
+
+
+## Données INSEE
+
+library(readr)
+library(readr)
+age_des_enfants_comparaison <- read_delim("age des enfants comparaison.csv", 
+                                          delim = ";", escape_double = FALSE, trim_ws = TRUE)
+View(age_des_enfants_comparaison)
+
+## Données pros
+  
+library(dplyr)
+
+nb_enfants_pro <- nb_enfants_count_percent %>%
+  mutate(age_category = case_when(
+    value >= 0 & value <= 2 ~ "0 à 2 ans",
+    value >= 3 & value <= 5 ~ "3 à 5 ans",
+    value %in% c(6, 7) | value == "Autre" ~ "6 à 17 ans",
+    TRUE ~ "Autre"
+  ))
+
+
+age_enfants_pro <- nb_enfants_pro %>%
+  group_by(age_category) %>%
+  summarise(
+    n = sum(n, na.rm = TRUE),
+    percent = sum(percent, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+## Données parents
+
+
+library(dplyr)
+library(tidyr)
+
+# Select age columns
+age_enfants_parents <- Nettoyage_parents %>%
+  select(starts_with("age_enfant"))
+
+# Convert to long format to have all ages in one column
+age_long <- age_enfants_parents %>%
+  pivot_longer(
+    cols = everything(),
+    values_to = "age"
+  ) %>%
+  select(age) %>%  # keep only the age column
+  filter(!is.na(age)) %>%       # remove missing ages
+  mutate(age = as.numeric(gsub("[^0-9]", "", age)))
+# Count occurrences and calculate percentages
+age_counts <- age_long %>%
+  count(age) %>%
+  mutate(percent = n / sum(n) * 100)
+# Group into categories
+age_grouped <- age_counts %>%
+  mutate(age_category = case_when(
+    age %in% 0:2 ~ "0 à 2 ans",
+    age %in% 3:5 ~ "3 à 5 ans",
+    age %in% 6:17 ~ "6 à 17 ans"
+  )) %>%
+  group_by(age_category) %>%
+  summarise(
+    n = sum(n),
+    percent = sum(percent)
+  ) %>%
+  ungroup()
+
+age_grouped
+
+## Merge des 3 databases
+
+library(dplyr)
+
+age_des_enfants_comparaison_clean <- age_des_enfants_comparaison %>%
+  select(`Âge révolu`, pourcentage) %>%
+  rename(
+    age_category = `Âge révolu`,
+    percent_comparaison = pourcentage
+  )
+age_des_enfants_comparaison_clean <- age_des_enfants_comparaison_clean %>%
+  mutate(percent_comparaison = percent_comparaison / 100000000)
+
+
+
+# For the professional dataset
+age_enfants_pro_clean <- age_enfants_pro %>%
+  select(age_category, percent)%>%
+  rename(percent_pros = percent)%>%
+  filter(!is.na(age_category))
+
+
+# For the parents dataset
+age_grouped_clean <- age_grouped %>%
+  select(age_category, percent) %>%
+  rename(percent_parents = percent)%>%
+  filter(!is.na(age_category))
+
+# Merge all three datasets
+age_final_merged <- age_des_enfants_comparaison_clean %>%
+  full_join(age_enfants_pro_clean, by = "age_category") %>%
+  full_join(age_grouped_clean, by = "age_category")
+
+age_final_merged
+
+library(dplyr)
+
+# Merge parents and pros first
+merged_age <- full_join(age_grouped, age_enfants_pro, by = "age_category", suffix = c("_parents", "_pros"))
+
+# Merge with comparaison
+final_age <- full_join(merged_age, age_des_enfants_comparaison_clean, by = "age_category")
+
+# Rename columns consistently
+final_age <- final_age %>%
+  rename(
+    percent_parents = percent_parents,
+    percent_pros = percent_pros,
+    percent_comparaison = percent_comparaison
+  ) %>%
+  select(age_category, percent_comparaison, percent_pros, percent_parents)
+
+final_age <- final_age %>%
+  filter (!is.na(age_category))
+
+final_age <- final_age %>%
+  group_by(age_category) %>%
+  summarise(
+    percent_comparaison = sum(percent_comparaison, na.rm = TRUE),
+    percent_pros = sum(percent_pros, na.rm = TRUE),
+    percent_parents = sum(percent_parents, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+##### PLOT
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Combine similar age categories by numeric ranges
+final_age_combined <- final_age %>%
+  mutate(age_group = case_when(
+    grepl("0", age_category) ~ "0 à 2 ans",
+    grepl("3", age_category) ~ "3 à 5 ans",
+    grepl("6", age_category) ~ "6 à 17 ans"
+  )) %>%
+  group_by(age_group) %>%
+  summarise(
+    percent_pros = sum(percent_pros, na.rm = TRUE),
+    percent_parents = sum(percent_parents, na.rm = TRUE),
+    percent_comparaison = sum(percent_comparaison, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# Pivot to long format
+final_age_plot_data <- final_age_combined %>%
+  pivot_longer(
+    cols = c(percent_pros, percent_parents, percent_comparaison),
+    names_to = "source",
+    values_to = "percent"
+  ) %>%
+  mutate(
+    source = factor(source, levels = c("percent_pros", "percent_parents", "percent_comparaison"))
+  )
+
+# Plot
+ggplot(final_age_plot_data, aes(x = age_group, y = percent, fill = source)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(aes(label = paste0(round(percent), "%")),
+            position = position_dodge(width = 0.8),
+            vjust = -0.5,
+            color = "black",
+            size = 6) +
+  scale_fill_manual(
+    values = c(
+      "percent_pros" = "#F0A6C8", 
+      "percent_parents" = "#F4813D", 
+      "percent_comparaison" = "#FF4C4C"
+    ),
+    labels = c("Données pros", "Données parents", "Comparaison")
+  ) +
+  labs(x = NULL, y = NULL, fill = NULL) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "transparent", color = NA),
+    plot.background = element_rect(fill = "transparent", color = NA),
+    panel.grid = element_blank(),
+    axis.text.x = element_text(size = 14, color = "black"),
+    axis.text.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(color = "black"),
+    legend.title = element_text(color = "black"),
+    legend.position = "bottom"
+  ) +
+  ylim(0, max(final_age_plot_data$percent, na.rm = TRUE) * 1.2)
+
+```

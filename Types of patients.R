@@ -2,15 +2,15 @@ install.packages("vroom")
 library(vroom)
 
 library(readr)
+library(dplyr)
+library(tidyr)
 
 ## Types de patients
 
 ## Données pro
 type_patients <- PAB %>%
   select(patient1, patient2, patient3, patient4, patient5, patient6, patient7, patient8, patient9, patient10) %>%
-  filter(if_any(everything(), ~ !is.na(.))) %>%
-  filter(!is.na(value))
-
+  filter(if_any(everything(), ~ !is.na(.)))
 
 type_patients_count <- type_patients %>%
   pivot_longer(everything(), names_to = "patient_col", values_to = "value") %>%

@@ -265,9 +265,9 @@ ggplot(final_plot_data, aes(x = value, y = percent, fill = source)) +
             size = 5) +
   scale_fill_manual(
     values = c(
-      "données_pros" = "#F0A6C8", 
+      "données_pros" = "#FF4C4C", 
       "donnees_parents" = "#F4813D", 
-      "donnees_comparaison" = "#FF4C4C"  # same red as before
+      "donnees_comparaison" = "#F0A6C8"  # same red as before
     ),
     labels = c("Données pros", "Données parents", "Comparaison")
   ) +
