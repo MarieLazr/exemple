@@ -11,110 +11,68 @@ famille_count <- PAB %>%
 
 ## Pour la base de données parents
 
-famille_count_percent <- famille_count %>%
+famille_count_percent_pros <- famille_count %>%
   mutate(percent = n / sum(n) * 100)
 
-famille_count_percent <- famille_count %>%
+famille_count_percent_pros <- famille_count %>%
   mutate(percent = n / sum(n) * 100) %>%
   mutate(value_recode = recode(value,
                                "Une famille nucléaireUne famille composée d'un couple de parents et leur(s) enfant(s)" = "Une famille nucléaire",
                                "Autre (veuillez préciser)" = "Autre"))
 
 ## Pour la base de données professionnels 
-famille_count_percent <- famille_count %>%
-  mutate(value_recode=recode(value,
-                             "Aucun des éléments ci-dessus"="Autre")) %>%
+
+library(dplyr)
+
+famille_count_percent_parents <- Nettoyage_parents %>%
+  select(type_famille) %>%
+  mutate(
+    value_recode = recode(type_famille,
+                          "Une famille nucléaireUne famille composée d'un couple de parents et leur(s) enfant(s)" = "Une famille nucléaire",
+                          "Autre (veuillez préciser)" = "Autre"
+    )
+  ) %>%
+  count(value_recode) %>%
   mutate(percent = n / sum(n) * 100)
 
-
-## Graphique mis en forme
-ggplot(famille_count_percent, aes(x = fct_reorder(value_recode, percent), y = percent)) +
-  geom_col(fill="#F0A6C8") +
-  labs(x = "Patient", y = "Count") +
-  theme_minimal()+
-  labs(
-    title = NULL,
-    x = NULL,
-    y = NULL
-  )+
-  geom_text(aes(label = paste0(round(percent, 1), "%")), vjust = -0.5, family="Avenir", size=4) +
-  theme(
-    panel.background = element_rect(fill = "transparent", color = NA),
-    panel.grid = element_blank(),
-    plot.background = element_rect(fill = "transparent", color = NA),
-    axis.text.x = element_text(size=16, angle = 45, hjust = 1),
-    axis.text.y=element_blank(),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
-  )
-ggsave("type de famille.png",
-       plot = last_plot(),
-       width = 12,   # largeur en pouces
-       height = 8,   # hauteur en pouces
-       dpi = 300,    # résolution
-       bg = "transparent")  # fond transparent
-library(ggplot2)
-library(forcats)
-library(stringr)
-
-ggplot(famille_count_percent, aes(x = fct_reorder(value_recode, percent), y = percent)) +
-  geom_col(fill="#F0A6C8", width = 0.6) +
-  geom_text(aes(label = paste0(round(percent, 1), "%")), 
-            hjust = -0.1, family="Avenir", size=4) +  # texte à gauche des barres
-  scale_y_continuous(labels = function(x) paste0(x, "%"), expand = expansion(mult = c(0, 0.1))) +
-  labs(x = NULL, y = NULL, title = NULL) +
-  coord_flip() +  # bascule à l'horizontal
-  theme_minimal(base_size = 14) +
-  theme(
-    panel.background = element_rect(fill = "transparent", color = NA),
-    plot.background = element_rect(fill = "transparent", color = NA),
-    panel.grid = element_blank(),
-    axis.text.x = element_text(size = 12),
-    axis.text.y = element_text(size = 12),  # labels horizontaux sur l'axe y
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
-  )
 
 ## Ajout des données de comparaison
 library(readr)
 library(readr)
-données_comparaison_type_famille <- read_delim("données comparaison type famille.csv", 
-                                               delim = ";", escape_double = FALSE, trim_ws = TRUE)
-View(données_comparaison_type_famille)
-
-données_comparaison_type_famille_clean <- données_comparaison_type_famille %>%
-  filter(if_any(everything(), ~!is.na(.))) %>%
-  # Remove columns that are completely NA
-  select(where(~!all(is.na(.)))) %>%
-  mutate(percent = value / sum(value) * 100)
-
-## Merge des 2 bases de données
-merged_data_famille <- famille_count_percent %>%
-  left_join(données_comparaison_type_famille_clean,
-            by = c("value_recode" = "type"))
-
-## Ajout données parents
-famille_parents <- Nettoyage_parents %>%
-  select (type_famille) %>%
-  mutate(value_recode = recode(type_famille,
-                               "Une famille nucléaireUne famille composée d'un couple de parents et leur(s) enfant(s)" = "Une famille nucléaire",
-                               "Autre (veuillez préciser)" = "Autre"))
-
-merged_data_famille <- merged_data_famille %>%
-  left_join(famille_parents_summary,
-            by = c("value_recode" = "type_famille")) 
-
 library(dplyr)
 
-merged_data_famille <- merged_data_famille %>%
-  rename(
-    Données_pros=percent.x
-  )
+données_comparaison_type_famille_clean <- tibble::tribble(
+  ~value_recode,                 ~percent,
+  "Une famille monoparentale",    9.5,
+  "Une famille nucléaire",       23.4,
+  "Une famille recomposée",       3.6   # 
+)
+
 
 
 library(dplyr)
 
-famille_parents_summary <- famille_parents %>%
-  count(type_famille) %>%                      
-  mutate(percent = n / sum(n) * 100)  
+# Parents
+famille_count_percent_parents <- famille_count_percent_parents %>%
+  select(value_recode, percent) %>%
+  rename(Données_parents = percent)
+
+# Pros
+famille_count_percent_pro <- famille_count_percent_pro %>%
+  select(value_recode, percent) %>%
+  rename(Données_pros = percent)
+
+# Comparaison
+données_comparaison_type_famille_clean <- données_comparaison_type_famille_clean %>%
+  rename(Données_comparaison = percent)
+
+# Fusionner les 3 sur value_recode
+merged_data_famille <- famille_count_percent_parents %>%
+  full_join(famille_count_percent_pro, by = "value_recode") %>%
+  full_join(données_comparaison_type_famille_clean, by = "value_recode")
+merged_data_famille <- merged_data_famille %>%
+  filter(!value_recode %in% c("Aucun des éléments ci-dessus", "Autre"))
+
 
 
 

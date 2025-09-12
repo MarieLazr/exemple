@@ -280,3 +280,4 @@ ggplot(plot_data, aes(y = value, x = percent, fill = source)) +
     legend.position = "bottom"
   ) +
   coord_cartesian(xlim = c(0, max(plot_data$percent, na.rm = TRUE) * 1.2))
+

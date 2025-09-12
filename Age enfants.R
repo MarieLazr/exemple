@@ -13,26 +13,6 @@ age_enfants <- PAB %>%
 nb_enfants_count_percent <- nb_enfants_count %>%
   mutate(percent = n / sum(n) * 100)
 
-## Graphique mis en forme
-ggplot(nb_enfants_count_percent, aes(x = value, y = percent)) +
-  geom_col(fill="#F0A6C8") +
-  labs(x = "Patient", y = "Count") +
-  theme_minimal()+
-  labs(
-    title = NULL,
-    x = NULL,
-    y = NULL
-  )+
-  geom_text(aes(label = paste0(round(percent, 1), "%")), vjust = -0.5, family="Avenir", size=4) +
-  theme(
-    panel.background = element_rect(fill = "transparent", color = NA),
-    panel.grid = element_blank(),
-    plot.background = element_rect(fill = "transparent", color = NA),
-    axis.text.x = element_text(size=16, angle = 0, hjust = 1),
-    axis.text.y=element_blank(),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
-  )
-
 ### Ajout des données de comparaison
 
 
